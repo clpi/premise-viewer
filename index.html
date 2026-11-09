@@ -121,7 +121,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 
 .timeline{overflow-y:auto;padding:14px 16px 60px;position:relative}
 .simbanner{
-  position:sticky;top:-14px;z-index:5;margin:-14px -16px 12px;padding:8px 16px;
+  position:sticky;top:0;z-index:5;margin:-14px -16px 12px;padding:8px 16px;
   background:#1b1410;border-bottom:1px solid #4a2a1c;color:#e9b39a;
   font-family:var(--mono);font-size:11px;display:flex;gap:10px;align-items:center;
 }
@@ -986,11 +986,10 @@ function premiseRow(pid, compact){
   </li>`;
 }
 
-function decisionCard(d){
+function decisionCard(d, simRows){
   const v = d.verdict;
   const isOpen = state.expanded.has(d.id);
-  const impact = state.simulate ? impact(state.simulate) : null;
-  const affected = impact ? impact.rows.some(r => r.d.id === d.id) : false;
+  const affected = simRows ? simRows.rows.some(r => r.d.id === d.id) : false;
   const downstream = boundCites(v.binds || '');
   const sentSize = (d.premises.length * 0.42 + 0.6).toFixed(1);
 
@@ -1054,13 +1053,14 @@ function decisionCard(d){
 
 function renderTimeline(){
   const all = decsOf(state.session);
+  const simRows = state.simulate ? impact(state.simulate) : null;
   let ds = all;
   if (state.filter === 'low') ds = all.filter(d => d.verdict.conf < 0.7);
   else if (state.filter !== 'all') ds = all.filter(d => d.kind === state.filter);
 
   let banner = '';
-  if (state.simulate){
-    const im = impact(state.simulate);
+  if (state.simulate && simRows){
+    const im = simRows;
     banner = `<div class="simbanner">
       <span>retraction simulation · <b>${state.simulate}</b></span>
       <span>unbinds <b>${im.rows.length}</b> decision${im.rows.length === 1 ? '' : 's'} across <b>${im.sessions.length}</b> session${im.sessions.length === 1 ? '' : 's'} · <b>${im.artifacts.length}</b> artifacts at risk</span>
@@ -1069,7 +1069,7 @@ function renderTimeline(){
   }
 
   const html = ds.length
-    ? ds.map(decisionCard).join('')
+    ? ds.map(d => decisionCard(d, simRows)).join('')
     : `<div style="padding:26px;color:var(--dim);font-family:var(--mono);font-size:11px">no decisions match this filter</div>`;
 
   $('#timeline').innerHTML = banner + html;
