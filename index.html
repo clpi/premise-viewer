@@ -1,0 +1,1239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>premise · decision session viewer</title>
+<style>
+:root{
+  --bg:#0a0c0f; --panel:#0d1015; --panel2:#11151c; --panel3:#151a23;
+  --line:#1c222c; --line2:#2a3341;
+  --txt:#dde4ee; --txt2:#aeb9c8; --muted:#7f8b9c; --dim:#5a6474;
+  --accent:#4fb8e8;
+  --bound:#4cc38a; --advisory:#c9a227; --contested:#e0713f; --over:#d9534f;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--txt); font-family:var(--sans);
+  font-size:13px; line-height:1.45; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#232b36;border-radius:0}
+::-webkit-scrollbar-thumb:hover{background:#313c4a}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.mono{font-family:var(--mono);font-variant-ligatures:none}
+.dim{color:var(--dim)}
+.muted{color:var(--muted)}
+
+/* ---------- shell ---------- */
+.app{display:grid;grid-template-rows:auto 1fr auto;height:100vh}
+
+.tbar{
+  display:flex;align-items:center;gap:18px;
+  padding:0 14px;height:44px;
+  background:linear-gradient(180deg,#101419,#0c0f14);
+  border-bottom:1px solid var(--line);
+}
+.brand{display:flex;align-items:baseline;gap:9px}
+.brand b{font-family:var(--mono);font-size:13px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:#eaf1fa}
+.brand span{font-size:11px;color:var(--dim);letter-spacing:.04em}
+.tbar-sep{width:1px;height:20px;background:var(--line2)}
+.tbar-meta{display:flex;gap:14px;font-family:var(--mono);font-size:11px;color:var(--muted);align-items:center}
+.tbar-meta b{color:var(--txt2);font-weight:500}
+.tbar-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn{
+  border:1px solid var(--line2);border-radius:3px;padding:4px 9px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--txt2);background:#141922;
+}
+.btn:hover{border-color:#3c4c5f;color:#fff;background:#18202b}
+.btn.on{background:#132a35;border-color:#2b6d87;color:#9fe0f7}
+
+.body{display:grid;grid-template-columns:288px minmax(0,1fr) 372px;min-height:0}
+
+/* ---------- sessions ---------- */
+.sessions{
+  background:var(--panel);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;
+}
+.col-head{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:9px 12px;border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+}
+.sess-list{overflow-y:auto;flex:1}
+.sess{
+  display:block;width:100%;text-align:left;padding:10px 12px 11px;
+  border-bottom:1px solid var(--line);border-left:2px solid transparent;
+  position:relative;
+}
+.sess:hover{background:#121722}
+.sess.sel{background:#151d28;border-left-color:var(--accent)}
+.sess-top{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.sess-id{font-family:var(--mono);font-size:11px;color:var(--txt2);letter-spacing:.03em}
+.dot{width:5px;height:5px;border-radius:50%;flex:none}
+.dot.bound{background:var(--bound)}
+.dot.mixed{background:var(--advisory)}
+.dot.warn{background:var(--over)}
+.sess-title{font-size:12.5px;color:#e6edf6;line-height:1.3;margin-bottom:4px}
+.sess-branch{font-family:var(--mono);font-size:10.5px;color:var(--dim);margin-bottom:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sess-stats{display:flex;align-items:center;gap:8px}
+.spark{display:flex;align-items:flex-end;gap:2px;height:12px;flex:1}
+.spark i{flex:1;min-width:2px;background:#33404f;border-radius:1px}
+.spark i.h{background:#4a7f96}
+.spark i.w{background:var(--over)}
+.spark i.c{background:var(--contested)}
+.sess-conf{font-family:var(--mono);font-size:10.5px;color:var(--muted);white-space:nowrap}
+.sess-conf b{color:var(--txt);font-weight:500}
+.sess-badges{display:flex;gap:4px;margin-top:6px}
+.mini{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;
+  padding:1px 5px;border-radius:2px;border:1px solid var(--line2);color:var(--muted);
+}
+.mini.warn{border-color:#5a2a24;color:#e79187;background:#1c1312}
+.mini.ok{border-color:#21503c;color:#66c99b;background:#0f1a16}
+
+/* ---------- detail ---------- */
+.detail{display:flex;flex-direction:column;min-height:0;background:var(--bg)}
+.det-head{padding:12px 16px 0;border-bottom:1px solid var(--line);background:var(--panel)}
+.det-row1{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.det-row1 h1{font-size:15px;font-weight:600;letter-spacing:-.01em;color:#f0f5fb}
+.det-row1 .sid{font-family:var(--mono);font-size:11px;color:var(--accent);background:#0f222b;border:1px solid #1e4353;padding:1px 6px;border-radius:2px}
+.det-meta{display:flex;gap:14px;flex-wrap:wrap;margin-top:5px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.det-meta b{color:var(--txt2);font-weight:500}
+.tiles{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);margin-top:11px;border-top:1px solid var(--line)}
+.tile{background:var(--panel);padding:7px 10px 8px}
+.tile .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+.tile .v{font-family:var(--mono);font-size:15px;color:var(--txt);line-height:1.1}
+.tile .v small{font-size:10px;color:var(--muted);margin-left:3px}
+.tile .v.warn{color:#e88a70}
+.filters{display:flex;gap:6px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.filters .lbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-right:2px}
+.fchip{font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:2px;border:1px solid transparent;color:var(--muted)}
+.fchip:hover{color:var(--txt)}
+.fchip.on{background:#17212c;border-color:#2d3d4e;color:#dbe7f3}
+.filters .r{margin-left:auto;display:flex;gap:6px}
+
+.timeline{overflow-y:auto;padding:14px 16px 60px;position:relative}
+.simbanner{
+  position:sticky;top:-14px;z-index:5;margin:-14px -16px 12px;padding:8px 16px;
+  background:#1b1410;border-bottom:1px solid #4a2a1c;color:#e9b39a;
+  font-family:var(--mono);font-size:11px;display:flex;gap:10px;align-items:center;
+}
+.simbanner b{color:#ffd7c2;font-weight:600}
+.dp{
+  position:relative;border:1px solid var(--line);background:var(--panel);
+  border-radius:3px;margin-bottom:10px;
+}
+.dp:hover{border-color:#28313d}
+.dp.open{border-color:#2f3d4d;box-shadow:0 0 0 1px #1a2530}
+.dp.affected{border-color:#5a3524;background:#14100e}
+.dp.unbound{opacity:.42;filter:saturate(.35)}
+.dp-h{display:flex;align-items:center;gap:9px;padding:9px 11px;cursor:pointer;width:100%;text-align:left}
+.seq{font-family:var(--mono);font-size:10.5px;color:var(--dim);width:18px;flex:none;text-align:right}
+.rail{position:absolute;left:-1px;top:0;bottom:0;width:2px;border-radius:2px 0 0 2px}
+.kind{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.07em;text-transform:uppercase;
+  padding:1px 5px;border-radius:2px;border:1px solid;flex:none;
+}
+.kind.regalloc{color:#8fb8e8;border-color:#283c52;background:#101722}
+.kind.inline{color:#b6a2e6;border-color:#332b4a;background:#151120}
+.kind.test{color:#84c6ba;border-color:#22423c;background:#0e1a18}
+.dp-t{font-size:12.5px;color:#e8eef7;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dp-t em{font-style:normal;color:var(--muted)}
+.chip{
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+  padding:1px 6px;border-radius:2px;border:1px solid;flex:none;
+}
+.chip.bound{color:#63d19e;border-color:#1f4b39;background:#0e1a15}
+.chip.advisory{color:#d8b849;border-color:#4b3f18;background:#171408}
+.chip.contested{color:#eda07a;border-color:#553420;background:#1a1109}
+.chip.overridden{color:#e78b86;border-color:#542524;background:#1a0f0f}
+.meter{width:56px;height:4px;background:#1e252f;border-radius:2px;overflow:hidden;flex:none}
+.meter i{display:block;height:100%;background:#4a7f96}
+.meter.lo i{background:#a8622f}
+.meter.mid i{background:#8f7a2c}
+.confv{font-family:var(--mono);font-size:11px;color:var(--txt2);width:32px;text-align:right;flex:none}
+.caret{width:10px;color:var(--dim);flex:none;transition:transform .12s;font-size:9px}
+.dp.open .caret{transform:rotate(90deg)}
+.dp-meta{padding:0 11px 8px 39px;font-family:var(--mono);font-size:10px;color:var(--dim);display:flex;gap:10px;flex-wrap:wrap;margin-top:-4px}
+.dp-meta b{color:var(--muted);font-weight:500}
+.dp-meta .jump{cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
+.dp-meta .jump:hover{color:var(--accent)}
+
+/* expanded */
+.dp-body{border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr}
+.col{padding:10px 11px;min-width:0}
+.col.sent{border-right:1px solid var(--line);background:#0c0f14}
+.col-h{
+  display:flex;align-items:center;gap:8px;margin-bottom:8px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+}
+.col-h .tag{color:#8fb8e8}
+.col-h.ret .tag{color:#63d19e}
+.col-h .sp{margin-left:auto;letter-spacing:0;text-transform:none;font-size:10px;color:var(--dim)}
+.question{
+  font-size:12px;color:var(--txt2);padding:7px 9px;margin-bottom:9px;
+  border-left:2px solid #2a3542;background:#0f141b;line-height:1.4;
+}
+.question span{font-family:var(--mono);font-size:9.5px;color:var(--dim);display:block;margin-bottom:2px;letter-spacing:.1em;text-transform:uppercase}
+.prem-list{list-style:none;display:flex;flex-direction:column;gap:6px}
+.prem{
+  border:1px solid var(--line);border-radius:2px;padding:6px 8px;cursor:pointer;background:#0e1218;
+  transition:border-color .1s,background .1s;
+}
+.prem:hover{border-color:#39506250;border-color:#375062;background:#121821}
+.prem.bound-p{border-left:2px solid #2f5f4b}
+.prem.bound-p:hover{border-color:#3f7f63}
+.prem-top{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+.src{
+  font-family:var(--mono);font-size:9px;letter-spacing:.05em;text-transform:uppercase;
+  padding:0 4px;border-radius:2px;border:1px solid var(--line2);color:var(--muted);
+}
+.src.profile{color:#8fb8e8;border-color:#283c52}
+.src.ir{color:#b6a2e6;border-color:#332b4a}
+.src.rule{color:#c9b06a;border-color:#453c22}
+.src.trace{color:#84c6ba;border-color:#22423c}
+.src.test{color:#8fbf7a;border-color:#2b3f25}
+.src.diff{color:#9aa6b6;border-color:#333d4a}
+.src.assumption{color:#e0a06f;border-color:#4a3524}
+.src.verdict{color:#63d19e;border-color:#1f4b39}
+.p-id{font-family:var(--mono);font-size:9.5px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q-badge{font-family:var(--mono);font-size:9px;color:var(--dim);margin-left:auto;white-space:nowrap}
+.q-badge.weak{color:#e0a06f}
+.p-claim{font-size:11.5px;color:var(--txt);line-height:1.35}
+.p-loc{font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.advice{font-size:14px;color:#eaf2fa;line-height:1.3;margin-bottom:9px;font-weight:500}
+.advice .op{color:#63d19e}
+.conf-block{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.conf-big{font-family:var(--mono);font-size:19px;color:#f0f6fc;line-height:1}
+.conf-big small{display:block;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-top:2px}
+.conf-block .meter{width:auto;flex:1;height:5px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:9px}
+.kv span:nth-child(odd){color:var(--dim)}
+.rationale{list-style:none;display:flex;flex-direction:column;gap:3px;margin-bottom:9px}
+.rationale li{font-size:11px;color:var(--txt2);padding-left:11px;position:relative;line-height:1.35}
+.rationale li:before{content:"›";position:absolute;left:1px;color:var(--dim)}
+.alts{display:flex;flex-direction:column;gap:3px;margin-bottom:9px}
+.alt{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.alt .bar{flex:1;height:3px;background:#1b222c;border-radius:2px;overflow:hidden}
+.alt .bar i{display:block;height:100%;background:#3c5f70}
+.binds{border-top:1px dashed var(--line2);padding-top:8px}
+.binds .bh{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:5px}
+.bind-as{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.bind-pill{
+  font-family:var(--mono);font-size:10px;color:#63d19e;background:#0d1a14;border:1px solid #1f4b39;
+  padding:1px 6px;border-radius:2px;cursor:pointer;
+}
+.bind-pill:hover{background:#12251c}
+.cite-pill{
+  font-family:var(--mono);font-size:10px;color:var(--txt2);background:#141a22;border:1px solid var(--line2);
+  padding:1px 6px;border-radius:2px;cursor:pointer;
+}
+.cite-pill:hover{border-color:#3c5064;color:#fff}
+.arts{display:flex;flex-direction:column;gap:2px}
+.art{font-family:var(--mono);font-size:10px;color:var(--dim)}
+.art b{color:var(--muted);font-weight:500}
+
+/* ---------- inspector ---------- */
+#insp{
+  background:var(--panel);border-left:1px solid var(--line);
+  display:flex;flex-direction:column;min-height:0;
+}
+.insp-body{overflow-y:auto;padding:12px 13px 40px;flex:1}
+.insp-empty{padding:26px 16px;color:var(--dim);font-size:12px;line-height:1.6}
+.insp-empty .big{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#3f4a58;margin-bottom:8px}
+.insp-id{font-family:var(--mono);font-size:11px;color:#8fb8e8;word-break:break-all}
+.insp-claim{font-size:13px;color:#eef4fb;line-height:1.4;margin:7px 0 4px}
+.sec{margin-top:14px}
+.sec-h{
+  font-family:var(--mono);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim);
+  padding-bottom:5px;margin-bottom:7px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;
+}
+.sec-h b{color:var(--txt2);font-weight:500}
+.kv2{display:grid;grid-template-columns:76px 1fr;gap:3px 8px;font-family:var(--mono);font-size:10.5px}
+.kv2 dt{color:var(--dim);letter-spacing:.02em}
+.kv2 dd{color:var(--txt2);word-break:break-word}
+.kv2 dd.hi{color:#9fd8f2}
+.qual-row{display:flex;align-items:center;gap:8px;margin-top:9px}
+.qual-row .meter{flex:1;width:auto;height:5px}
+.qtag{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;padding:1px 5px;border-radius:2px;border:1px solid var(--line2);color:var(--muted)}
+.qtag.measured{color:#63d19e;border-color:#1f4b39}
+.qtag.assumed{color:#e0a06f;border-color:#4a3524}
+.qtag.spec{color:#c9b06a;border-color:#453c22}
+.pnote{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5;border-left:2px solid var(--line2);padding-left:8px}
+
+.cite-row{
+  display:flex;align-items:center;gap:7px;padding:6px 7px;border:1px solid var(--line);
+  border-radius:2px;margin-bottom:5px;cursor:pointer;background:#0e1218;
+}
+.cite-row:hover{border-color:#395062;background:#121821}
+.cite-row .n{font-family:var(--mono);font-size:10px;color:var(--dim);width:16px;flex:none}
+.cite-row .t{font-size:11.5px;color:var(--txt2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cite-row .s{font-family:var(--mono);font-size:9.5px;color:var(--dim);flex:none}
+.cite-row.casc{opacity:.9}
+.cite-row.casc .n{color:#c98a5e}
+
+.imp-tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:9px}
+.imp-tile{background:#0e1218;padding:6px 8px}
+.imp-tile .k{font-family:var(--mono);font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.imp-tile .v{font-family:var(--mono);font-size:15px;color:var(--txt);line-height:1.15}
+.imp-tile .v.warn{color:#e88a70}
+.imp-tile .v.zero{color:#3f4a58}
+.sim-btn{width:100%;margin-top:9px}
+.chain{display:flex;flex-direction:column;gap:2px;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.chain .arrow{color:var(--dim);padding-left:2px}
+.chain .unb{color:#e0a06f}
+.warnlist{list-style:none;display:flex;flex-direction:column;gap:3px}
+.warnlist li{font-size:11px;color:var(--txt2);display:flex;gap:6px;line-height:1.35}
+.warnlist li:before{content:"!";font-family:var(--mono);color:#e0a06f}
+
+/* ---------- statusbar ---------- */
+.sbar{
+  height:24px;display:flex;align-items:center;gap:16px;padding:0 12px;
+  background:#0c0f13;border-top:1px solid var(--line);
+  font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:.03em;
+}
+.sbar .r{margin-left:auto;display:flex;gap:14px}
+.sbar b{color:var(--muted);font-weight:500}
+.hl{outline:1px solid #2b6d87;outline-offset:1px}
+
+@media (max-width:1240px){
+  .body{grid-template-columns:250px minmax(0,1fr)}
+  #insp{display:none}
+  .body.insp-on{grid-template-columns:250px minmax(0,1fr) 340px}
+  .body.insp-on #insp{display:flex}
+  .tiles{grid-template-columns:repeat(3,1fr)}
+}
+@media (max-width:900px){
+  .dp-body{grid-template-columns:1fr}
+  .col.sent{border-right:0;border-bottom:1px solid var(--line)}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="tbar">
+    <div class="brand"><b>premise</b><span>decision session viewer</span></div>
+    <div class="tbar-sep"></div>
+    <div class="tbar-meta">
+      <span>proj <b>ravenc</b></span>
+      <span>target <b>x86-64</b></span>
+      <span>pipeline <b>decide-2.1</b></span>
+      <span>window <b>2026-11-08 06:20 → 09:47 PT</b></span>
+    </div>
+    <div class="tbar-right">
+      <button class="btn" id="expandAll">expand all</button>
+      <button class="btn" id="collapseAll">collapse</button>
+    </div>
+  </div>
+
+  <div class="body" id="body">
+    <div class="sessions">
+      <div class="col-head"><span>sessions</span><span id="sessCount"></span></div>
+      <div class="sess-list" id="sessList"></div>
+    </div>
+
+    <div class="detail">
+      <div class="det-head" id="detHead"></div>
+      <div class="filters" id="filters"></div>
+      <div class="timeline" id="timeline"></div>
+    </div>
+
+    <aside id="insp"></aside>
+  </div>
+
+  <div class="sbar">
+    <span><b id="sb1"></b></span>
+    <span>sample data · synthetic</span>
+    <div class="r">
+      <span id="sb2"></span>
+      <span>esc to clear</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   SAMPLE DATA
+   A decision pipeline: IDE sends decision points with premises, a pipeline
+   returns an advisory verdict with a confidence, and a bound verdict becomes
+   a citable premise for later decisions.
+   ========================================================================= */
+
+const PREMISES = {
+  /* ---------- raw premises: S-1191 ---------- */
+  'prm.prof.conv2d.pressure': {
+    claim: 'conv2d_tile runs at 1.9 spill slots per basic block, under the 2.0 backtracking trigger',
+    src: {kind:'profile', locator:'profiles/conv2d-watch.2026-11-08.jsonl:12', digest:'sha256:1ba77c9f', collector:'perf 6.11', commit:'71d0e42', at:'2026-11-08T05:58:41Z'},
+    quality:'measured', conf:0.89,
+    note:'4 of 5 sampled runs agree; one run at 2.1 is the noisy tail and was excluded before the decision.'
+  },
+  'prm.ir.conv2d.size': {
+    claim:'conv2d_tile body is 96 IR instructions with 28 live values at peak',
+    src:{kind:'ir', locator:'ir/conv2d.opt.mir:1140-1236', digest:'sha256:44e0aa17', collector:'ravenc 0.14.0-dev --emit=mir', commit:'71d0e42', at:'2026-11-08T05:59:03Z'},
+    quality:'measured', conf:0.94,
+    note:'Live-range histogram emitted with the dump; peak is at the accumulator merge block.'
+  },
+  'prm.chg.diff.conv': {
+    claim:'Patch touches 3 files in codegen/vec: conv2d_tile.rs, lane_fuse.rs, mod.rs',
+    src:{kind:'diff', locator:'git diff 71d0e42..a41b9c7 --stat', digest:'sha256:0d31f5b2', collector:'git 2.46', commit:'a41b9c7', at:'2026-11-08T06:04:12Z'},
+    quality:'measured', conf:0.99, note:'No test or manifest files changed.'
+  },
+
+  /* ---------- raw premises: S-1192 ---------- */
+  'prm.chg.diff.hotfix': {
+    claim:'Hotfix a0c9e31 changes 1 file and only reorders two independent store operations',
+    src:{kind:'diff', locator:'git show a0c9e31 --stat', digest:'sha256:7c22d1e9', collector:'git 2.46', commit:'a0c9e31', at:'2026-11-08T06:51:20Z'},
+    quality:'measured', conf:0.99, note:'Operand order only; no control-flow edits.'
+  },
+  'prm.tst.manifest.lanes': {
+    claim:'CI defines 9 test lanes totalling 34m of wall time on build-07',
+    src:{kind:'test', locator:'ci/lanes.toml:1-64', digest:'sha256:bb14ae60', collector:'ci-lane-index 3.2', commit:'a41b9c7', at:'2026-11-08T06:00:00Z'},
+    quality:'measured', conf:0.97, note:'Durations are p50 over the last 40 runs.'
+  },
+  'prm.assume.no-perf-impact': {
+    claim:'A pure store reorder is semantics-preserving and cannot shift measured performance',
+    src:{kind:'assumption', locator:'triage note by on-call (no artifact)', digest:'none', collector:'typed into session by IDE', commit:'a0c9e31', at:'2026-11-08T06:52:02Z'},
+    quality:'assumed', conf:0.52,
+    note:'Unbacked. Store-ordering changes have moved cache-line behaviour before; the pipeline flagged this as the weakest link in the session.'
+  },
+  'prm.tst.failmatrix.perf': {
+    claim:'The perf lane caught 2 of the 2 store-ordering regressions filed in the last 90 days',
+    src:{kind:'test', locator:'metrics/failmatrix.csv:perf,rows 811-842', digest:'sha256:6ef3b004', collector:'failmatrix 1.9', commit:'a41b9c7', at:'2026-11-08T07:12:44Z'},
+    quality:'measured', conf:0.86, note:'Sample is small but no counter-example exists.'
+  },
+
+  'prm.tst.failmatrix.ra2': {
+    claim:'ra2-regress caught 3 of the 4 codegen regressions filed in the last 90 days',
+    src:{kind:'test', locator:'metrics/failmatrix.csv:ra2,rows 118-149', digest:'sha256:6ef3b004', collector:'failmatrix 1.9', commit:'a41b9c7', at:'2026-11-08T06:01:33Z'},
+    quality:'measured', conf:0.84, note:'The one miss was a verifier change that ra2-regress does not model.'
+  },
+
+  /* ---------- raw premises: S-1193 ---------- */
+  'prm.prof.dot.megamorph': {
+    claim:'vec4::dot has 2 call sites, both monomorphic, and accounts for 88% of shade_surface cycles',
+    src:{kind:'profile', locator:'profiles/shade-surface.2026-11-08.jsonl:7', digest:'sha256:2ad90f13', collector:'perf 6.11', commit:'a41b9c7', at:'2026-11-08T07:31:19Z'},
+    quality:'measured', conf:0.90, note:'Both call sites resolve to the same instantiation.'
+  },
+  'prm.ir.dot.size': {
+    claim:'vec4::dot is 12 IR instructions after opts',
+    src:{kind:'ir', locator:'ir/vec4.opt.mir:88-100', digest:'sha256:5c1d77ab', collector:'ravenc 0.14.0-dev --emit=mir', commit:'a41b9c7', at:'2026-11-08T07:31:52Z'},
+    quality:'measured', conf:0.96, note:'Four FMAs plus reduction; no branches.'
+  },
+  'prm.prof.serheader.cold': {
+    claim:'serialize_header is reached in 0.02% of samples',
+    src:{kind:'profile', locator:'profiles/shade-surface.2026-11-08.jsonl:411', digest:'sha256:2ad90f13', collector:'perf 6.11', commit:'a41b9c7', at:'2026-11-08T07:33:10Z'},
+    quality:'measured', conf:0.93, note:'Cold but not dead: 11 call sites exercise it in the corpus.'
+  },
+  'prm.ir.serheader.size': {
+    claim:'serialize_header is 380 IR instructions across 11 call sites',
+    src:{kind:'ir', locator:'ir/serialize.opt.mir:220-600', digest:'sha256:9e4b1204', collector:'ravenc 0.14.0-dev --emit=mir', commit:'a41b9c7', at:'2026-11-08T07:33:41Z'},
+    quality:'measured', conf:0.94, note:'Inlining at all 11 sites would add roughly 4.2 KB of text.'
+  },
+  'prm.chg.diff.threshold': {
+    claim:'Patch touches 2 files: inliner/threshold.rs and inliner/cost.rs',
+    src:{kind:'diff', locator:'git diff a41b9c7..b7f0221 --stat', digest:'sha256:3f7ac9de', collector:'git 2.46', commit:'b7f0221', at:'2026-11-08T07:28:00Z'},
+    quality:'measured', conf:0.99, note:''
+  },
+  'prm.tst.failmatrix.inline': {
+    claim:'The inline lane caught 2 of 2 inliner regressions in the last 90 days',
+    src:{kind:'test', locator:'metrics/failmatrix.csv:inline,rows 640-661', digest:'sha256:6ef3b004', collector:'failmatrix 1.9', commit:'b7f0221', at:'2026-11-08T07:29:12Z'},
+    quality:'measured', conf:0.80, note:'Thin sample; verdict weight was capped accordingly.'
+  },
+
+  'prm.rule.inline.codegrowth': {
+    claim:'Inliner code-growth guard: text growth above 2.5% blocks inlining regardless of cost tier',
+    src:{kind:'rule', locator:'codegen/inline/RULES.md §5.3', digest:'sha256:dd40e1a2', collector:'in-repo ruleset inl/2026.10', commit:'b7f0221', at:'2026-11-08T00:00:00Z'},
+    quality:'spec', conf:0.87, note:'A hard guard, not a heuristic: the pipeline cannot advise past it.'
+  },
+
+  /* ---------- raw premises: S-1194 ---------- */
+  'prm.prof.matmul.pressure': {
+    claim:'matmul_kernel_hot peaks at 2.4 spill slots per basic block, 1.5x the linear-scan budget',
+    src:{kind:'profile', locator:'profiles/matmul-hot.2026-11-08.jsonl:41', digest:'sha256:9f2c1a4e', collector:'perf 6.11 + llvm-mca 18.0', commit:'b7f0221', at:'2026-11-08T09:38:02Z'},
+    quality:'measured', conf:0.94, note:'6 sampled frames agree: p50 2.4, p95 2.9 slots per block.'
+  },
+  'prm.ir.matmul.mir': {
+    claim:'matmul_kernel_hot holds 3 live FP accumulators across a 34-instruction loop body',
+    src:{kind:'ir', locator:'ir/matmul.opt.mir:2208-2242', digest:'sha256:c13f90d4', collector:'ravenc 0.14.0-dev --emit=mir', commit:'b7f0221', at:'2026-11-08T09:38:24Z'},
+    quality:'measured', conf:0.91, note:'Accumulators stay live across the whole loop, which is what sets the floor.'
+  },
+  'prm.rule.ra2.pressure': {
+    claim:'RA2 heuristic table: switch to backtracking when pressure exceeds 1.6x the linear-scan budget',
+    src:{kind:'rule', locator:'codegen/ra2/RULES.md §4.2 table 3', digest:'sha256:8a01cc77', collector:'in-repo ruleset ra2/2026.10', commit:'b7f0221', at:'2026-11-08T00:00:00Z'},
+    quality:'spec', conf:0.88, note:'Table 3 is the rule the pipeline actually binds against; §4.2 prose is stale.'
+  },
+  'prm.trace.spill.history': {
+    claim:'The last linear-scan run on matmul_kernel_hot spilled 41 bytes/block and cost 7.2% cycles',
+    src:{kind:'trace', locator:'traces/ra2-matmul.2026-10-30.jsonl', digest:'sha256:e4c1b8f0', collector:'ra2 trace replay 0.9', commit:'5d8e113', at:'2026-10-30T18:22:07Z'},
+    quality:'measured', conf:0.90, note:'Same kernel, previous release; compares allocation strategies only.'
+  },
+  'prm.prof.callsite.mat4mul': {
+    claim:'mat4_mul has 3 call sites; the hot one inside ray_trace executes 61M times per frame batch',
+    src:{kind:'profile', locator:'profiles/matmul-hot.2026-11-08.jsonl:118', digest:'sha256:9f2c1a4e', collector:'perf 6.11', commit:'b7f0221', at:'2026-11-08T09:38:44Z'},
+    quality:'measured', conf:0.92, note:'Other two sites are cold and sit in the init path.'
+  },
+  'prm.ir.mat4mul.size': {
+    claim:'mat4_mul lowers to 41 IR instructions after opts',
+    src:{kind:'ir', locator:'ir/mat4.opt.mir:302-342', digest:'sha256:1f6c83aa', collector:'ravenc 0.14.0-dev --emit=mir', commit:'b7f0221', at:'2026-11-08T09:39:01Z'},
+    quality:'measured', conf:0.95, note:''
+  },
+  'prm.rule.inline.threshold': {
+    claim:'Inliner: cost < 60 lands in the always-inline tier regardless of call-site count',
+    src:{kind:'rule', locator:'codegen/inline/RULES.md §2.1', digest:'sha256:dd40e1a2', collector:'in-repo ruleset inl/2026.10', commit:'b7f0221', at:'2026-11-08T00:00:00Z'},
+    quality:'spec', conf:0.90, note:'Tier boundary, not a hard override: the pipeline may still advise against inlining on code-growth grounds.'
+  },
+  'prm.regress.inline.hist': {
+    claim:'mat4_mul has produced no icache regression in the last 2 releases when inlined',
+    src:{kind:'test', locator:'metrics/regress.csv:icache,rows 44-71', digest:'sha256:aa3c1180', collector:'regress 2.1', commit:'b7f0221', at:'2026-11-08T09:39:20Z'},
+    quality:'measured', conf:0.78, note:'Zen3 and Sapphire Rapids agree; older Skylake rows were dropped from the sample.'
+  },
+  'prm.chg.diff.fpunroll': {
+    claim:'Patch touches 6 files on codegen/fp-unroll, including the RA2 cost table',
+    src:{kind:'diff', locator:'git diff b7f0221..HEAD --stat', digest:'sha256:71be90c3', collector:'git 2.46', commit:'c04d8ae', at:'2026-11-08T09:37:10Z'},
+    quality:'measured', conf:0.99, note:'RA2 cost table edits widen the blast radius of any allocation decision.'
+  },
+  'prm.ir.bvh.size': {
+    claim:'bvh_traverse is 210 IR instructions with 22 live values at peak',
+    src:{kind:'ir', locator:'ir/bvh.opt.mir:140-350', digest:'sha256:30be7fe1', collector:'ravenc 0.14.0-dev --emit=mir', commit:'c04d8ae', at:'2026-11-08T09:43:30Z'},
+    quality:'measured', conf:0.93, note:'Below the 32-live-range small-function boundary but not by much.'
+  },
+  'prm.rule.ra2.small.fn': {
+    claim:'RA2 heuristic: functions under 32 live ranges default to linear scan',
+    src:{kind:'rule', locator:'codegen/ra2/RULES.md §4.4', digest:'sha256:8a01cc77', collector:'in-repo ruleset ra2/2026.10', commit:'b7f0221', at:'2026-11-08T00:00:00Z'},
+    quality:'spec', conf:0.86, note:'Written when linear scan was the only fallback; §4.2 table 3 has since diverged.'
+  },
+  'prm.prof.bvh.cold': {
+    claim:'bvh_traverse holds 0.4% of profile samples',
+    src:{kind:'profile', locator:'profiles/matmul-hot.2026-11-08.jsonl:903', digest:'sha256:9f2c1a4e', collector:'perf 6.11', commit:'c04d8ae', at:'2026-11-08T09:43:52Z'},
+    quality:'measured', conf:0.71, note:'0.4% sits inside the sampling noise floor for a 30s capture; the pipeline scored it as weak evidence.'
+  },
+
+  /* ---------- verdicts bound as premises ---------- */
+  'prm.bnd.conv2d.alloc': {
+    claim:'alloc(conv2d_tile) = spill-first linear scan, 2 reserved scratch registers',
+    src:{kind:'verdict', locator:'decision d10 · verdict v1 · session S-1191', digest:'blake3:8c14a0', collector:'decide-2.1', commit:'a41b9c7', at:'2026-11-08T06:22:47Z'},
+    quality:'bound', conf:0.79, note:'Bound into S-1191 and citable by later sessions. Consumed by d1 as prior art.'
+  },
+  'prm.bnd.conv2d.noinline': {
+    claim:'no-inline(conv2d_stage → conv2d_tile): code growth would exceed the 2.5% guard',
+    src:{kind:'verdict', locator:'decision d11 · verdict v1 · session S-1191', digest:'blake3:31f08b', collector:'decide-2.1', commit:'a41b9c7', at:'2026-11-08T06:28:11Z'},
+    quality:'bound', conf:0.66, note:'Accepted but the weakest binding in S-1191; the verdict itself called it marginal.'
+  },
+  'prm.bnd.lanes.S1191': {
+    claim:'test lanes for 71d0e42: vec-regress, ra2-regress, bench-vec',
+    src:{kind:'verdict', locator:'decision d12 · verdict v1 · session S-1191', digest:'blake3:6a02fd', collector:'decide-2.1', commit:'a41b9c7', at:'2026-11-08T06:31:05Z'},
+    quality:'bound', conf:0.88, note:'3 of 9 lanes; the rest were judged non-overlapping with the diff.'
+  },
+  'prm.bnd.lanes.S1192': {
+    claim:'test lanes for a0c9e31: vec-regress, bench-vec (perf-skew excluded)',
+    src:{kind:'verdict', locator:'decision d8 · verdict v1 · session S-1192', digest:'blake3:c0e4b1', collector:'decide-2.1', commit:'a0c9e31', at:'2026-11-08T07:06:33Z'},
+    quality:'contested', conf:0.55, note:'Contested on the floor at 07:09 by the release owner. Retained only as a citable premise with its contest attached.'
+  },
+  'prm.bnd.lanes.S1192b': {
+    claim:'test lanes for a0c9e31 (revised): vec-regress, perf-skew, bench-vec',
+    src:{kind:'verdict', locator:'decision d9 · verdict v1 · session S-1192', digest:'blake3:9d771c', collector:'decide-2.1', commit:'a0c9e31', at:'2026-11-08T07:14:50Z'},
+    quality:'bound', conf:0.83, note:'Supersedes the contested verdict from d8. The earlier binding is kept so the reversal stays visible.'
+  },
+  'prm.bnd.vec4dot.inline': {
+    claim:'inline(vec4::dot → shade_surface) = always, all call sites',
+    src:{kind:'verdict', locator:'decision d5 · verdict v1 · session S-1193', digest:'blake3:2b8f44', collector:'decide-2.1', commit:'b7f0221', at:'2026-11-08T08:13:29Z'},
+    quality:'bound', conf:0.94, note:'Strongest binding of the window; both call sites are monomorphic.'
+  },
+  'prm.bnd.serheader.noinline': {
+    claim:'no-inline(serialize_header): 4.2 KB text growth breaches the code-growth guard',
+    src:{kind:'verdict', locator:'decision d6 · verdict v1 · session S-1193', digest:'blake3:5e09ba', collector:'decide-2.1', commit:'b7f0221', at:'2026-11-08T08:19:02Z'},
+    quality:'bound', conf:0.89, note:''
+  },
+  'prm.bnd.lanes.S1193': {
+    claim:'test lanes for b7f0221: inline-regress, bench-inline, llvm-lit:inliner',
+    src:{kind:'verdict', locator:'decision d7 · verdict v1 · session S-1193', digest:'blake3:44b1e7', collector:'decide-2.1', commit:'b7f0221', at:'2026-11-08T08:24:36Z'},
+    quality:'bound', conf:0.81, note:''
+  },
+  'prm.bnd.matmul.alloc': {
+    claim:'alloc(matmul_kernel_hot) = backtracking + evict-last, 4 callee-saved reserved',
+    src:{kind:'verdict', locator:'decision d1 · verdict v1 · session S-1194', digest:'blake3:7d1e0c', collector:'decide-2.1', commit:'c04d8ae', at:'2026-11-08T09:41:02Z'},
+    quality:'bound', conf:0.87, note:'Cited downstream by the session test selection. Spill report artifact is keyed to this binding.'
+  },
+  'prm.bnd.mat4mul.inline': {
+    claim:'inline(mat4_mul → ray_trace) = always, hot call site only',
+    src:{kind:'verdict', locator:'decision d2 · verdict v1 · session S-1194', digest:'blake3:a10c73', collector:'decide-2.1', commit:'c04d8ae', at:'2026-11-08T09:45:18Z'},
+    quality:'bound', conf:0.91, note:''
+  },
+  'prm.bnd.lanes.S1194': {
+    claim:'test lanes for c04d8ae: ra2-regress, fp-conformance, perf-smoke, llvm-lit:codegen',
+    src:{kind:'verdict', locator:'decision d3 · verdict v1 · session S-1194', digest:'blake3:f3e2d9', collector:'decide-2.1', commit:'c04d8ae', at:'2026-11-08T09:46:40Z'},
+    quality:'bound', conf:0.72, note:'4 of 9 lanes. Confidence is limited by the fail-matrix sample size, not by the diff.'
+  },
+  'prm.ovr.bvh.alloc': {
+    claim:'OVERRIDE: backtracking was applied to bvh_traverse against a linear-scan verdict at 0.58',
+    src:{kind:'verdict', locator:'decision d4 · verdict v1 · session S-1194', digest:'blake3:68aa51', collector:'decide-2.1', commit:'c04d8ae', at:'2026-11-08T09:47:12Z'},
+    quality:'overridden', conf:0.58,
+    note:'The IDE overrode the advice. This binding is recorded but deliberately does not propagate: nothing downstream cites it, and the pipeline marks it as unsupported.'
+  }
+};
+
+const SESSIONS = [
+  {id:'S-1194', title:'Hot-loop codegen pass', branch:'codegen/fp-unroll', commit:'c04d8ae', base:'b7f0221', started:'09:37', ended:'09:47', status:'open', env:'ravenc 0.14.0-dev · build-07'},
+  {id:'S-1193', title:'Inliner threshold sweep', branch:'inline/threshold-60', commit:'b7f0221', base:'a41b9c7', started:'08:11', ended:'08:25', status:'closed', env:'ravenc 0.14.0-dev · build-07'},
+  {id:'S-1192', title:'Triage: store-reorder hotfix', branch:'test/triage-hotfix', commit:'a0c9e31', base:'71d0e42', started:'07:04', ended:'07:16', status:'closed', env:'ravenc 0.14.0-dev · build-07'},
+  {id:'S-1191', title:'Register pressure watch', branch:'codegen/conv2d', commit:'a41b9c7', base:'71d0e42', started:'06:20', ended:'06:32', status:'closed', env:'ravenc 0.14.0-dev · build-07'}
+];
+
+const DECISIONS = [
+  /* ---------------- S-1194 ---------------- */
+  {
+    id:'d1', session:'S-1194', seq:1, kind:'regalloc',
+    title:'Allocation strategy', subject:'fn matmul_kernel_hot',
+    question:'Which allocator for matmul_kernel_hot: backtracking with evict-last, or linear scan with rematerialization?',
+    at:'09:41:02',
+    premises:['prm.prof.matmul.pressure','prm.ir.matmul.mir','prm.rule.ra2.pressure','prm.trace.spill.history','prm.bnd.conv2d.alloc'],
+    verdict:{
+      advice:'backtracking + evict-last', conf:0.87, status:'bound',
+      model:'decide-2.1', ruleset:'ra2/2026.10', latency:'412ms',
+      rationale:[
+        'Peak pressure 2.4 slots/BB clears the 1.6x trigger in table 3 by a wide margin.',
+        'Three accumulators live across the full loop body, so rematerialization cannot recover them.',
+        'Prior linear-scan run on the same kernel cost 7.2% cycles; the cost model matches within 0.4%.'
+      ],
+      alts:[{opt:'linear scan + remat', score:0.21},{opt:'hybrid split allocation', score:0.14}],
+      binds:'prm.bnd.matmul.alloc', cites:['prm.bnd.conv2d.alloc']
+    },
+    artifacts:[{label:'ra2 spill report', state:'attached'},{label:'lane ra2-regress', state:'queued'}]
+  },
+  {
+    id:'d2', session:'S-1194', seq:2, kind:'inline',
+    title:'Inline decision', subject:'mat4_mul → ray_trace',
+    question:'Inline mat4_mul into its hot call site in ray_trace, given 41 IR instructions and 61M executions?',
+    at:'09:45:18',
+    premises:['prm.prof.callsite.mat4mul','prm.ir.mat4mul.size','prm.rule.inline.threshold','prm.regress.inline.hist'],
+    verdict:{
+      advice:'inline always, hot call site', conf:0.91, status:'bound',
+      model:'decide-2.1', ruleset:'inl/2026.10', latency:'298ms',
+      rationale:[
+        'Cost 41 sits well under the 60 always-inline tier boundary.',
+        'The hot site executes 61M times per frame batch; the other two sites stay out.',
+        'No icache regression recorded for this function across two releases.'
+      ],
+      alts:[{opt:'no inline', score:0.16},{opt:'inline all 3 sites', score:0.33}],
+      binds:'prm.bnd.mat4mul.inline', cites:['prm.bnd.serheader.noinline']
+    },
+    artifacts:[{label:'lane inline-regress', state:'pass'},{label:'bench-inline', state:'pending'}]
+  },
+  {
+    id:'d3', session:'S-1194', seq:3, kind:'test',
+    title:'Test selection', subject:'9 lanes → 4',
+    question:'Which CI lanes actually cover this patch, given the RA2 cost table edits and the allocation change?',
+    at:'09:46:40',
+    premises:['prm.chg.diff.fpunroll','prm.tst.manifest.lanes','prm.tst.failmatrix.ra2'],
+    verdict:{
+      advice:'ra2-regress, fp-conformance, perf-smoke, llvm-lit:codegen', conf:0.72, status:'bound',
+      model:'decide-2.1', ruleset:'gate/2026.09', latency:'186ms',
+      rationale:[
+        'RA2 cost table edits imply ra2-regress is mandatory regardless of overlap.',
+        'fp-conformance covers the FP accumulator path that the allocation change touches.',
+        'perf-smoke is included because the fail matrix shows allocation regressions surface there first.',
+        'Confidence is capped by a thin fail-matrix sample, not by the diff.'
+      ],
+      alts:[{opt:'all 9 lanes', score:0.44},{opt:'ra2-regress + llvm-lit only', score:0.19}],
+      binds:'prm.bnd.lanes.S1194', cites:['prm.bnd.matmul.alloc','prm.bnd.mat4mul.inline','prm.bnd.lanes.S1193']
+    },
+    artifacts:[{label:'4 lanes scheduled', state:'running'},{label:'34m → 19m projected', state:'info'}]
+  },
+  {
+    id:'d4', session:'S-1194', seq:4, kind:'regalloc',
+    title:'Allocation strategy (override)', subject:'fn bvh_traverse',
+    question:'Which allocator for bvh_traverse: 210 IR instructions, 22 live values at peak?',
+    at:'09:47:12',
+    premises:['prm.ir.bvh.size','prm.rule.ra2.small.fn','prm.prof.bvh.cold'],
+    verdict:{
+      advice:'linear scan', conf:0.58, status:'overridden',
+      model:'decide-2.1', ruleset:'ra2/2026.10', latency:'377ms',
+      rationale:[
+        'Function is under the 32-live-range boundary in §4.4, which defaults to linear scan.',
+        '0.4% of samples means the cost of a wrong choice is bounded.',
+        'Evidence quality is weak: the profile share sits inside the noise floor.'
+      ],
+      alts:[{opt:'backtracking', score:0.39},{opt:'defer to next session', score:0.22}],
+      binds:'prm.ovr.bvh.alloc', cites:[]
+    },
+    artifacts:[{label:'override recorded by cli@build-07', state:'info'}]
+  },
+
+  /* ---------------- S-1193 ---------------- */
+  {
+    id:'d5', session:'S-1193', seq:1, kind:'inline',
+    title:'Inline decision', subject:'vec4::dot → shade_surface',
+    question:'Inline vec4::dot into shade_surface with the threshold raised to 60?',
+    at:'08:13:29',
+    premises:['prm.prof.dot.megamorph','prm.ir.dot.size','prm.rule.inline.threshold'],
+    verdict:{
+      advice:'inline always, both call sites', conf:0.94, status:'bound',
+      model:'decide-2.1', ruleset:'inl/2026.10', latency:'204ms',
+      rationale:[
+        'Cost 12 is in the always-inline tier; no judgment call was needed on cost alone.',
+        'Both call sites are monomorphic, so there is no devirtualization risk.',
+        'shade_surface is 88% of the profile; inlining removes a call per vertex.'
+      ],
+      alts:[{opt:'no inline', score:0.05}],
+      binds:'prm.bnd.vec4dot.inline', cites:[]
+    },
+    artifacts:[{label:'lane inline-regress', state:'pass'},{label:'bench-inline', state:'+2.1% throughput'}]
+  },
+  {
+    id:'d6', session:'S-1193', seq:2, kind:'inline',
+    title:'Inline decision', subject:'serialize_header (cold, 11 sites)',
+    question:'The new threshold would inline serialize_header at all 11 call sites. Should it?',
+    at:'08:19:02',
+    premises:['prm.prof.serheader.cold','prm.ir.serheader.size','prm.rule.inline.codegrowth'],
+    verdict:{
+      advice:'no-inline (guard wins over tier)', conf:0.89, status:'bound',
+      model:'decide-2.1', ruleset:'inl/2026.10', latency:'241ms',
+      rationale:[
+        '380 instructions across 11 sites is 4.2 KB of text growth, past the 2.5% guard.',
+        '0.02% of samples means the inlining buys essentially nothing.',
+        'The guard is a hard limit, so the tier does not apply here.'
+      ],
+      alts:[{opt:'inline 1 hot site', score:0.28}],
+      binds:'prm.bnd.serheader.noinline', cites:[]
+    },
+    artifacts:[{label:'code-growth check', state:'blocked at 4.2 KB'}]
+  },
+  {
+    id:'d7', session:'S-1193', seq:3, kind:'test',
+    title:'Test selection', subject:'9 lanes → 3',
+    question:'Which lanes cover the threshold change and the two inline decisions?',
+    at:'08:24:36',
+    premises:['prm.chg.diff.threshold','prm.tst.failmatrix.inline'],
+    verdict:{
+      advice:'inline-regress, bench-inline, llvm-lit:inliner', conf:0.81, status:'bound',
+      model:'decide-2.1', ruleset:'gate/2026.09', latency:'158ms',
+      rationale:[
+        'Two inliner regressions in 90 days were both caught by inline-regress.',
+        'bench-inline is the only lane that would see a throughput shift from d5.'
+      ],
+      alts:[{opt:'all 9 lanes', score:0.38}],
+      binds:'prm.bnd.lanes.S1193', cites:['prm.bnd.vec4dot.inline']
+    },
+    artifacts:[{label:'3 lanes scheduled', state:'pass'}]
+  },
+
+  /* ---------------- S-1192 ---------------- */
+  {
+    id:'d8', session:'S-1192', seq:1, kind:'test',
+    title:'Test selection (contested)', subject:'hotfix, 1 file reorder',
+    question:'A one-file store reorder: is perf-skew needed, or do the functional lanes suffice?',
+    at:'07:06:33',
+    premises:['prm.chg.diff.hotfix','prm.tst.manifest.lanes','prm.assume.no-perf-impact'],
+    verdict:{
+      advice:'vec-regress, bench-vec (perf-skew excluded)', conf:0.55, status:'contested',
+      model:'decide-2.1', ruleset:'gate/2026.09', latency:'199ms',
+      rationale:[
+        'The diff is a pure reorder, which the cost model treats as perf-neutral.',
+        'Rests on an unbacked assumption typed into the session, so confidence was floored at 0.55.',
+        'The pipeline recommended contesting rather than binding silently.'
+      ],
+      alts:[{opt:'vec-regress, perf-skew, bench-vec', score:0.46},{opt:'all 9 lanes', score:0.12}],
+      binds:'prm.bnd.lanes.S1192', cites:[]
+    },
+    artifacts:[{label:'contest filed 07:09 by release owner', state:'open'}]
+  },
+  {
+    id:'d9', session:'S-1192', seq:2, kind:'test',
+    title:'Test selection (revised)', subject:'after contest',
+    question:'Re-decide lane selection now that the no-perf-impact assumption has been challenged.',
+    at:'07:14:50',
+    premises:['prm.tst.failmatrix.perf','prm.tst.manifest.lanes'],
+    verdict:{
+      advice:'vec-regress, perf-skew, bench-vec', conf:0.83, status:'bound',
+      model:'decide-2.1', ruleset:'gate/2026.09', latency:'221ms',
+      rationale:[
+        'The contested assumption was removed from the premise set, which moves the verdict.',
+        'perf-skew caught 2 of 2 store-ordering regressions in the last 90 days.',
+        'The earlier binding is retained as a superseded premise so the reversal stays auditable.'
+      ],
+      alts:[{opt:'keep prior selection', score:0.17}],
+      binds:'prm.bnd.lanes.S1192b', cites:['prm.bnd.lanes.S1192']
+    },
+    artifacts:[{label:'lane perf-skew', state:'pass'},{label:'lane vec-regress', state:'pass'}]
+  },
+
+  /* ---------------- S-1191 ---------------- */
+  {
+    id:'d10', session:'S-1191', seq:1, kind:'regalloc',
+    title:'Allocation strategy', subject:'fn conv2d_tile',
+    question:'conv2d_tile sits at 1.9 slots/BB, just under the trigger. Spill-first or backtracking?',
+    at:'06:22:47',
+    premises:['prm.prof.conv2d.pressure','prm.ir.conv2d.size','prm.rule.ra2.pressure'],
+    verdict:{
+      advice:'spill-first linear scan', conf:0.79, status:'bound',
+      model:'decide-2.1', ruleset:'ra2/2026.10', latency:'355ms',
+      rationale:[
+        '1.9 slots/BB is under the 1.6x trigger: 2.0 is the boundary and this function does not cross it.',
+        '28 live values is below the small-function boundary, so linear scan is also the default.',
+        'Headroom is thin, so the verdict carries a re-check note.'
+      ],
+      alts:[{opt:'backtracking', score:0.34}],
+      binds:'prm.bnd.conv2d.alloc', cites:[]
+    },
+    artifacts:[{label:'ra2 spill report', state:'attached'}]
+  },
+  {
+    id:'d11', session:'S-1191', seq:2, kind:'inline',
+    title:'Inline decision', subject:'conv2d_stage → conv2d_tile',
+    question:'Inline conv2d_stage into conv2d_tile? Call site is hot but the callee is 96 IR instructions.',
+    at:'06:28:11',
+    premises:['prm.ir.conv2d.size','prm.rule.inline.codegrowth'],
+    verdict:{
+      advice:'no-inline (marginal)', conf:0.66, status:'bound',
+      model:'decide-2.1', ruleset:'inl/2026.10', latency:'263ms',
+      rationale:[
+        'Text growth lands at 2.3%, just under the guard, so the guard does not decide it.',
+        'With no cost signal from the profiler, the verdict is close to a coin flip on the tier boundary.',
+        'Recorded as marginal: the pipeline expects this to be revisited with better profiling.'
+      ],
+      alts:[{opt:'inline hot site', score:0.41}],
+      binds:'prm.bnd.conv2d.noinline', cites:[]
+    },
+    artifacts:[{label:'code-growth check', state:'2.3% (under guard)'}]
+  },
+  {
+    id:'d12', session:'S-1191', seq:3, kind:'test',
+    title:'Test selection', subject:'9 lanes → 3',
+    question:'Which lanes cover the conv2d allocation and inline decisions?',
+    at:'06:31:05',
+    premises:['prm.chg.diff.conv','prm.tst.failmatrix.ra2'],
+    verdict:{
+      advice:'vec-regress, ra2-regress, bench-vec', conf:0.88, status:'bound',
+      model:'decide-2.1', ruleset:'gate/2026.09', latency:'147ms',
+      rationale:[
+        'ra2-regress caught 3 of 4 codegen regressions in the fail matrix.',
+        'vec-regress covers the lane-fuse change in the diff.'
+      ],
+      alts:[{opt:'all 9 lanes', score:0.31}],
+      binds:'prm.bnd.lanes.S1191', cites:['prm.bnd.conv2d.alloc']
+    },
+    artifacts:[{label:'3 lanes scheduled', state:'pass'},{label:'19m wall time', state:'info'}]
+  }
+];
+
+/* =========================================================================
+   STATE
+   ========================================================================= */
+const state = {
+  session: 'S-1194',
+  expanded: new Set(['d1']),
+  premise: null,          // selected premise id
+  filter: 'all',          // all | regalloc | inline | test | low
+  simulate: null          // premise id being retracted hypothetically
+};
+
+const $ = (s, r) => (r || document).querySelector(s);
+const byId = id => DECISIONS.find(d => d.id === id);
+const prem = id => PREMISES[id];
+const decsOf = sid => DECISIONS.filter(d => d.session === sid);
+const sessOf = sid => SESSIONS.find(s => s.id === sid);
+
+const KIND_LABEL = {regalloc:'register alloc', inline:'inlining', test:'test selection'};
+const STATUS_LABEL = {bound:'bound', advisory:'advisory', contested:'contested', overridden:'overridden'};
+
+function citesOf(pid){
+  return DECISIONS.filter(d => d.premises.includes(pid) || (d.verdict.cites || []).includes(pid));
+}
+function boundCites(pid){
+  return DECISIONS.filter(d => (d.verdict.cites || []).includes(pid));
+}
+function meterClass(c){ return c < 0.6 ? 'lo' : c < 0.75 ? 'mid' : ''; }
+function pct(c){ return Math.round(c * 100); }
+
+/* ---- blast radius: transitive walk premise -> decisions -> bound premise -> ... ---- */
+function impact(pid){
+  const rows = [];             // {d, viaPremise, depth, reason}
+  const seenDec = new Set();
+  const visitedPrem = new Set([pid]);
+  const queue = [{p: pid, depth: 0, from: null}];
+  while (queue.length){
+    const cur = queue.shift();
+    for (const d of citesOf(cur.p)){
+      if (seenDec.has(d.id)) continue;
+      seenDec.add(d.id);
+      rows.push({d, via: cur.p, depth: cur.depth + 1, direct: cur.depth === 0});
+      const b = d.verdict.binds;
+      if (b && !visitedPrem.has(b)){
+        visitedPrem.add(b);
+        queue.push({p: b, depth: cur.depth + 1, from: d.id});
+      }
+    }
+  }
+  const sessions = new Set(rows.map(r => r.d.session));
+  const artifacts = [];
+  rows.forEach(r => (r.d.artifacts || []).forEach(a => {
+    if (a.state !== 'info') artifacts.push({label: a.label, state: a.state, d: r.d});
+  }));
+  const bindings = rows.filter(r => r.d.verdict.status !== 'overridden').length;
+  return {rows, sessions: [...sessions], artifacts, bindings};
+}
+
+/* =========================================================================
+   RENDER: session list
+   ========================================================================= */
+function sessionStats(sid){
+  const ds = decsOf(sid);
+  const confs = ds.map(d => d.verdict.conf);
+  const mean = confs.reduce((a, b) => a + b, 0) / confs.length;
+  const bound = ds.filter(d => d.verdict.status === 'bound').length;
+  const contested = ds.filter(d => d.verdict.status === 'contested').length;
+  const over = ds.filter(d => d.verdict.status === 'overridden').length;
+  const low = ds.filter(d => d.verdict.conf < 0.7).length;
+  const prem = new Set();
+  ds.forEach(d => d.premises.forEach(p => prem.add(p)));
+  return {ds, mean, bound, contested, over, low, min: Math.min(...confs), prefCount: prem.size};
+}
+
+function renderSessions(){
+  const list = $('#sessList');
+  list.innerHTML = SESSIONS.map(s => {
+    const st = sessionStats(s.id);
+    const dot = st.over ? 'warn' : (st.low ? 'mixed' : 'bound');
+    const spark = st.ds.map(d => {
+      const cls = d.verdict.status === 'overridden' ? 'w' : d.verdict.status === 'contested' ? 'c' : (d.verdict.conf >= 0.8 ? 'h' : '');
+      return `<i class="${cls}" style="height:${Math.max(3, Math.round(d.verdict.conf * 12))}px" title="${d.title} · ${d.verdict.conf.toFixed(2)}"></i>`;
+    }).join('');
+    const badges = [];
+    if (st.contested) badges.push(`<span class="mini warn">${st.contested} contested</span>`);
+    if (st.over) badges.push(`<span class="mini warn">${st.over} override</span>`);
+    if (!st.contested && !st.over) badges.push(`<span class="mini ok">clean</span>`);
+    return `<button class="sess ${state.session === s.id ? 'sel' : ''}" data-sess="${s.id}">
+      <div class="sess-top">
+        <span class="dot ${dot}"></span>
+        <span class="sess-id">${s.id}</span>
+        <span class="mini" style="margin-left:auto">${s.status}</span>
+      </div>
+      <div class="sess-title">${s.title}</div>
+      <div class="sess-branch">${s.branch} · ${s.started}–${s.ended}</div>
+      <div class="sess-stats">
+        <span class="spark">${spark}</span>
+        <span class="sess-conf"><b>${st.mean.toFixed(2)}</b> mean</span>
+      </div>
+      <div class="sess-badges">${badges.join('')}</div>
+    </button>`;
+  }).join('');
+  $('#sessCount').textContent = SESSIONS.length + ' · 12 decisions';
+}
+
+/* =========================================================================
+   RENDER: detail head
+   ========================================================================= */
+function renderHead(){
+  const s = sessOf(state.session);
+  const st = sessionStats(s.id);
+  const boundPrem = decsOf(s.id).filter(d => d.verdict.binds).length;
+  $('#detHead').innerHTML = `
+    <div class="det-row1">
+      <span class="sid">${s.id}</span>
+      <h1>${s.title}</h1>
+      <span class="mini">${st.ds.length} decision points</span>
+    </div>
+    <div class="det-meta">
+      <span>branch <b>${s.branch}</b></span>
+      <span>head <b>${s.commit}</b></span>
+      <span>base <b>${s.base}</b></span>
+      <span>${s.env}</span>
+    </div>
+    <div class="tiles">
+      <div class="tile"><div class="k">decisions</div><div class="v">${st.ds.length}</div></div>
+      <div class="tile"><div class="k">bound</div><div class="v">${st.bound}<small>/ ${st.ds.length}</small></div></div>
+      <div class="tile"><div class="k">contested</div><div class="v ${st.contested ? 'warn' : ''}">${st.contested}</div></div>
+      <div class="tile"><div class="k">overrides</div><div class="v ${st.over ? 'warn' : ''}">${st.over}</div></div>
+      <div class="tile"><div class="k">mean conf</div><div class="v">${st.mean.toFixed(2)}</div></div>
+      <div class="tile"><div class="k">min conf</div><div class="v ${st.min < 0.7 ? 'warn' : ''}">${st.min.toFixed(2)}</div></div>
+    </div>`;
+}
+
+function renderFilters(){
+  const opts = [['all','all 12'],['regalloc','register alloc'],['inline','inlining'],['test','test selection'],['low','conf < 0.70']];
+  $('#filters').innerHTML = `<span class="lbl">filter</span>` +
+    opts.map(([k, l]) => `<button class="fchip ${state.filter === k ? 'on' : ''}" data-filter="${k}">${l}</button>`).join('') +
+    `<div class="r"><span class="mono dim" style="font-size:10px">${decsOf(state.session).length} in session</span></div>`;
+}
+
+/* =========================================================================
+   RENDER: timeline
+   ========================================================================= */
+function premiseRow(pid, compact){
+  const p = prem(pid);
+  if (!p) return '';
+  const isBound = p.src.kind === 'verdict';
+  const weak = p.quality === 'assumed' || p.conf < 0.7;
+  return `<li class="prem ${isBound ? 'bound-p' : ''}" data-prem="${pid}">
+    <div class="prem-top">
+      <span class="src ${p.src.kind}">${p.src.kind}</span>
+      <span class="p-id mono">${pid}</span>
+      <span class="q-badge ${weak ? 'weak' : ''}">${p.conf.toFixed(2)} · ${p.quality}</span>
+    </div>
+    <div class="p-claim">${p.claim}</div>
+    <div class="p-loc">${p.src.locator}</div>
+  </li>`;
+}
+
+function decisionCard(d){
+  const v = d.verdict;
+  const isOpen = state.expanded.has(d.id);
+  const impact = state.simulate ? impact(state.simulate) : null;
+  const affected = impact ? impact.rows.some(r => r.d.id === d.id) : false;
+  const downstream = boundCites(v.binds || '');
+  const sentSize = (d.premises.length * 0.42 + 0.6).toFixed(1);
+
+  const meta = [];
+  meta.push(`<span><b>${d.premises.length}</b> premises</span>`);
+  if (v.binds) meta.push(`<span>bound as <span class="jump" data-prem="${v.binds}">${v.binds}</span></span>`);
+  if (downstream.length) meta.push(`<span>cited by <b>${downstream.length}</b> downstream</span>`);
+  if (v.cites && v.cites.length) meta.push(`<span>cites <b>${v.cites.length}</b> prior verdict</span>`);
+
+  const body = isOpen ? `
+    <div class="dp-body">
+      <div class="col sent">
+        <div class="col-h"><span class="tag">→ sent</span><span>IDE → pipeline</span><span class="sp">decide/1.0 · ${sentSize} kB</span></div>
+        <div class="question"><span>decision point</span>${d.question}</div>
+        <ul class="prem-list">${d.premises.map(p => premiseRow(p)).join('')}</ul>
+        ${(v.cites || []).length ? `<div style="margin-top:8px" class="binds">
+            <div class="bh">also cited as prior verdicts</div>
+            <div class="bind-as">${v.cites.map(c => `<span class="bind-pill" data-prem="${c}">${c}</span>`).join('')}</div>
+          </div>` : ''}
+      </div>
+      <div class="col ret">
+        <div class="col-h ret"><span class="tag">← returned</span><span>200 ok</span><span class="sp">${v.latency}</span></div>
+        <div class="advice"><span class="op">verdict:</span> ${v.advice}</div>
+        <div class="conf-block">
+          <div class="conf-big">${v.conf.toFixed(2)}<small>confidence</small></div>
+          <span class="meter ${meterClass(v.conf)}"><i style="width:${pct(v.conf)}%"></i></span>
+        </div>
+        <div class="kv">
+          <span>model</span><span>${v.model}</span>
+          <span>ruleset</span><span>${v.ruleset}</span>
+          <span>binds</span><span>${v.status === 'overridden' ? 'recorded, does not propagate' : 'propagates as premise'}</span>
+        </div>
+        <ul class="rationale">${v.rationale.map(r => `<li>${r}</li>`).join('')}</ul>
+        <div class="alts">${v.alts.map(a => `<div class="alt"><span style="width:132px">${a.opt}</span><span class="bar"><i style="width:${pct(a.score)}%"></i></span><span>${a.score.toFixed(2)}</span></div>`).join('')}</div>
+        <div class="binds">
+          <div class="bh">binds downstream</div>
+          ${v.binds ? `<div class="bind-as"><span class="bind-pill" data-prem="${v.binds}">${v.binds}</span>
+            ${downstream.length
+              ? `cited by ${downstream.map(x => `<span class="cite-pill" data-goto="${x.id}">${x.session} d${x.seq}</span>`).join(' ')}`
+              : `<span class="dim mono" style="font-size:10px">no downstream citations yet</span>`}</div>` : ''}
+          <div class="arts">${(d.artifacts || []).map(a => `<div class="art"><b>${a.label}</b> · ${a.state}</div>`).join('')}</div>
+        </div>
+      </div>
+    </div>` : '';
+
+  return `<article class="dp ${isOpen ? 'open' : ''} ${affected ? 'affected' : ''} ${affected && state.simulate ? 'unbound' : ''}" id="dp-${d.id}">
+    <span class="rail" style="background:var(--${v.status === 'bound' ? 'bound' : v.status === 'contested' ? 'contested' : v.status === 'overridden' ? 'over' : 'advisory'})"></span>
+    <button class="dp-h" data-toggle="${d.id}">
+      <span class="seq">${String(d.seq).padStart(2, '0')}</span>
+      <span class="kind ${d.kind}">${KIND_LABEL[d.kind]}</span>
+      <span class="dp-t">${d.title} <em>· ${d.subject}</em></span>
+      <span class="chip ${v.status}">${STATUS_LABEL[v.status]}</span>
+      <span class="meter ${meterClass(v.conf)}"><i style="width:${pct(v.conf)}%"></i></span>
+      <span class="confv">${v.conf.toFixed(2)}</span>
+      <span class="caret">▶</span>
+    </button>
+    <div class="dp-meta">${meta.join('')}</div>
+    ${body}
+  </article>`;
+}
+
+function renderTimeline(){
+  const all = decsOf(state.session);
+  let ds = all;
+  if (state.filter === 'low') ds = all.filter(d => d.verdict.conf < 0.7);
+  else if (state.filter !== 'all') ds = all.filter(d => d.kind === state.filter);
+
+  let banner = '';
+  if (state.simulate){
+    const im = impact(state.simulate);
+    banner = `<div class="simbanner">
+      <span>retraction simulation · <b>${state.simulate}</b></span>
+      <span>unbinds <b>${im.rows.length}</b> decision${im.rows.length === 1 ? '' : 's'} across <b>${im.sessions.length}</b> session${im.sessions.length === 1 ? '' : 's'} · <b>${im.artifacts.length}</b> artifacts at risk</span>
+      <span style="margin-left:auto;text-decoration:underline dotted;cursor:pointer" id="endSim">end simulation</span>
+    </div>`;
+  }
+
+  const html = ds.length
+    ? ds.map(decisionCard).join('')
+    : `<div style="padding:26px;color:var(--dim);font-family:var(--mono);font-size:11px">no decisions match this filter</div>`;
+
+  $('#timeline').innerHTML = banner + html;
+  updateStatus();
+}
+
+/* =========================================================================
+   RENDER: premise inspector
+   ========================================================================= */
+function renderInspector(){
+  const el = $('#insp');
+  if (!state.premise){
+    el.innerHTML = `<div class="col-head"><span>premise inspector</span><span>idle</span></div>
+      <div class="insp-empty">
+        <div class="big">nothing selected</div>
+        Click any premise in a decision card to inspect its provenance, every decision that cites it, and the blast radius of retracting it.
+        <div style="margin-top:14px;font-family:var(--mono);font-size:10px;color:#4c5764;line-height:1.8">
+          → provenance: file, digest, collector<br>
+          → citations: direct and transitive<br>
+          → retraction: what stops being supported
+        </div>
+      </div>`;
+    document.body.classList.remove('insp-on');
+    $('#body').classList.remove('insp-on');
+    return;
+  }
+  $('#body').classList.add('insp-on');
+  const p = prem(state.premise);
+  if (!p){ el.innerHTML = ''; return; }
+  const im = impact(state.premise);
+  const sim = state.simulate === state.premise;
+
+  const citeRows = im.rows.map(r => `<div class="cite-row ${r.direct ? '' : 'casc'}" data-goto="${r.d.id}">
+      <span class="n">${r.direct ? '›' : '»'}</span>
+      <span class="t">${r.d.title} <span class="dim">· ${r.d.subject}</span></span>
+      <span class="s">${r.d.session} d${r.d.seq}</span>
+    </div>`).join('') || `<div class="dim" style="font-size:11px;padding:4px 2px">No decision cites this premise. It was sent but never consumed.</div>`;
+
+  const chain = im.rows.filter(r => !r.direct).map(r =>
+    `<div><span class="arrow">└ </span>${r.via} <span class="dim">invalidates</span> <span class="unb">${r.d.verdict.binds}</span> <span class="dim">→</span> ${r.d.session} d${r.d.seq}</div>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="col-head"><span>premise inspector</span>
+      <span style="display:flex;gap:8px;align-items:center">
+        <span style="color:var(--muted)">${im.rows.length} citation${im.rows.length === 1 ? '' : 's'}</span>
+        <button class="dim" id="closeInsp" style="font-size:13px;line-height:1" title="clear (esc)">✕</button>
+      </span>
+    </div>
+    <div class="insp-body">
+      <div class="src ${p.src.kind}" style="display:inline-block">${p.src.kind}</div>
+      <div class="insp-id" style="margin-top:5px">${state.premise}</div>
+      <div class="insp-claim">${p.claim}</div>
+      <div class="qtag ${p.quality === 'measured' ? 'measured' : p.quality === 'assumed' ? 'assumed' : p.quality === 'spec' ? 'spec' : ''}" style="display:inline-block;margin-top:2px">${p.quality}</div>
+      <div class="qual-row">
+        <span class="meter ${meterClass(p.conf)}"><i style="width:${pct(p.conf)}%"></i></span>
+        <span class="mono" style="font-size:11px;color:var(--txt2)">${p.conf.toFixed(2)}</span>
+      </div>
+      ${p.note ? `<div class="pnote">${p.note}</div>` : ''}
+
+      <div class="sec">
+        <div class="sec-h"><span>provenance</span><b>${p.src.kind}</b></div>
+        <dl class="kv2">
+          <dt>locator</dt><dd class="hi">${p.src.locator}</dd>
+          <dt>digest</dt><dd>${p.src.digest}</dd>
+          <dt>collector</dt><dd>${p.src.collector}</dd>
+          <dt>commit</dt><dd>${p.src.commit}</dd>
+          <dt>captured</dt><dd>${p.src.at.replace('T', ' ').replace('Z', ' UTC')}</dd>
+        </dl>
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><span>cited by</span><b>${im.rows.length}</b></div>
+        ${citeRows}
+        ${im.rows.some(r => !r.direct) ? `<div class="chain" style="margin-top:7px">${chain}</div>` : ''}
+      </div>
+
+      <div class="sec">
+        <div class="sec-h"><span>retraction impact</span><b>hypothetical</b></div>
+        <div class="imp-tiles">
+          <div class="imp-tile"><div class="k">unbinds</div><div class="v ${im.rows.length ? 'warn' : 'zero'}">${im.rows.length}</div></div>
+          <div class="imp-tile"><div class="k">sessions</div><div class="v ${im.sessions.length > 1 ? 'warn' : (im.sessions.length ? '' : 'zero')}">${im.sessions.length}</div></div>
+          <div class="imp-tile"><div class="k">artifacts</div><div class="v ${im.artifacts.length ? 'warn' : 'zero'}">${im.artifacts.length}</div></div>
+        </div>
+        <ul class="warnlist">
+          ${im.rows.filter(r => !r.direct).length ? `<li>${im.rows.filter(r => !r.direct).length} decision${im.rows.filter(r => !r.direct).length === 1 ? '' : 's'} lose support transitively through a bound verdict, not by direct citation.</li>` : ''}
+          ${im.sessions.length > 1 ? `<li>Cross-session: this premise reaches into ${im.sessions.filter(x => x !== (im.rows[0] && im.rows[0].d.session)).join(', ') || im.sessions.join(', ')}.</li>` : ''}
+          ${im.artifacts.length ? `<li>${im.artifacts.length} gate artifact${im.artifacts.length === 1 ? '' : 's'} would return to unverified: ${im.artifacts.slice(0, 3).map(a => a.label).join(', ')}${im.artifacts.length > 3 ? '…' : ''}</li>` : ''}
+          ${!im.rows.length ? `<li style="color:var(--dim)">No decision depends on this premise. Retracting it changes nothing.</li>` : ''}
+        </ul>
+        <button class="btn sim-btn ${sim ? 'on' : ''}" data-sim="${state.premise}">${sim ? 'end retraction simulation' : 'simulate retraction'}</button>
+        ${im.artifacts.length && sim ? `<div style="margin-top:9px" class="arts">${im.artifacts.map(a => `<div class="art">unverified · <b>${a.label}</b> (${a.d.session} d${a.d.seq})</div>`).join('')}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+/* =========================================================================
+   STATUS BAR + EVENTS
+   ========================================================================= */
+function updateStatus(){
+  const totalPrem = Object.keys(PREMISES).length;
+  const bindings = DECISIONS.filter(d => d.verdict.binds).length;
+  $('#sb1').textContent = `${SESSIONS.length} sessions · ${DECISIONS.length} decisions · ${totalPrem} premises · ${bindings} bindings`;
+  $('#sb2').textContent = `selected ${state.session} · ${state.premise ? 'premise ' + state.premise : 'no premise'}`;
+}
+
+function render(){
+  renderSessions();
+  renderHead();
+  renderFilters();
+  renderTimeline();
+  renderInspector();
+}
+
+function gotoDecision(id){
+  const d = byId(id);
+  if (!d) return;
+  state.session = d.session;
+  state.expanded.add(id);
+  state.filter = 'all';
+  render();
+  const el = document.getElementById('dp-' + id);
+  if (el){
+    el.scrollIntoView({block:'center', behavior:'smooth'});
+    el.classList.add('hl');
+    setTimeout(() => el.classList.remove('hl'), 1400);
+  }
+}
+
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-sess],[data-toggle],[data-prem],[data-goto],[data-filter],[data-sim],#closeInsp,#endSim,#expandAll,#collapseAll');
+  if (!t) return;
+
+  if (t.dataset.sess){ state.session = t.dataset.sess; state.simulate = null; render(); return; }
+  if (t.dataset.toggle){
+    const id = t.dataset.toggle;
+    state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id);
+    renderTimeline();
+    return;
+  }
+  if (t.dataset.prem){
+    e.stopPropagation();
+    state.premise = t.dataset.prem;
+    if (state.simulate && state.simulate !== state.premise) state.simulate = null;
+    renderInspector();
+    renderTimeline();
+    return;
+  }
+  if (t.dataset.goto){ gotoDecision(t.dataset.goto); return; }
+  if (t.dataset.filter){ state.filter = t.dataset.filter; renderFilters(); renderTimeline(); return; }
+  if (t.dataset.sim){
+    state.simulate = state.simulate === t.dataset.sim ? null : t.dataset.sim;
+    renderInspector();
+    renderTimeline();
+    return;
+  }
+  if (t.id === 'closeInsp'){ state.premise = null; state.simulate = null; render(); return; }
+  if (t.id === 'endSim'){ state.simulate = null; renderInspector(); renderTimeline(); return; }
+  if (t.id === 'expandAll'){ decsOf(state.session).forEach(d => state.expanded.add(d.id)); renderTimeline(); return; }
+  if (t.id === 'collapseAll'){ state.expanded.clear(); renderTimeline(); return; }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ state.premise = null; state.simulate = null; render(); }
+});
+
+render();
+</script>
+</body>
+</html>
