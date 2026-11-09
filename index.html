@@ -881,7 +881,7 @@ function impact(pid){
     artifacts.push({label: a.label, state: a.state, d: r.d});
   }));
   const bindings = rows.filter(r => r.d.verdict.status !== 'overridden').length;
-  return {rows, sessions: [...sessions], artifacts, bindings};
+  return {rows, sessions: [...sessions].sort(), artifacts, bindings};
 }
 
 /* =========================================================================
