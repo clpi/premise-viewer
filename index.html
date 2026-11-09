@@ -928,7 +928,7 @@ function renderSessions(){
       <div class="sess-badges">${badges.join('')}</div>
     </button>`;
   }).join('');
-  $('#sessCount').textContent = SESSIONS.length + ' · 12 decisions';
+  $('#sessCount').textContent = SESSIONS.length + ' · ' + DECISIONS.length + ' decisions';
 }
 
 /* =========================================================================
@@ -962,9 +962,13 @@ function renderHead(){
 
 function renderFilters(){
   const opts = [['all','all 12'],['regalloc','register alloc'],['inline','inlining'],['test','test selection'],['low','conf < 0.70']];
+  const all = decsOf(state.session);
+  const shown = state.filter === 'all' ? all.length
+    : state.filter === 'low' ? all.filter(d => d.verdict.conf < 0.7).length
+    : all.filter(d => d.kind === state.filter).length;
   $('#filters').innerHTML = `<span class="lbl">filter</span>` +
     opts.map(([k, l]) => `<button class="fchip ${state.filter === k ? 'on' : ''}" data-filter="${k}">${l}</button>`).join('') +
-    `<div class="r"><span class="mono dim" style="font-size:10px">${decsOf(state.session).length} in session</span></div>`;
+    `<div class="r"><span class="mono dim" style="font-size:10px">${shown} shown · ${all.length} in session</span></div>`;
 }
 
 /* =========================================================================
