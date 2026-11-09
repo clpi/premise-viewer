@@ -874,8 +874,11 @@ function impact(pid){
   }
   const sessions = new Set(rows.map(r => r.d.session));
   const artifacts = [];
+  const seenArt = new Set();
   rows.forEach(r => (r.d.artifacts || []).forEach(a => {
-    if (a.state !== 'info') artifacts.push({label: a.label, state: a.state, d: r.d});
+    if (a.state === 'info' || seenArt.has(a.label)) return;
+    seenArt.add(a.label);
+    artifacts.push({label: a.label, state: a.state, d: r.d});
   }));
   const bindings = rows.filter(r => r.d.verdict.status !== 'overridden').length;
   return {rows, sessions: [...sessions], artifacts, bindings};
@@ -995,7 +998,7 @@ function decisionCard(d){
   meta.push(`<span><b>${d.premises.length}</b> premises</span>`);
   if (v.binds) meta.push(`<span>bound as <span class="jump" data-prem="${v.binds}">${v.binds}</span></span>`);
   if (downstream.length) meta.push(`<span>cited by <b>${downstream.length}</b> downstream</span>`);
-  if (v.cites && v.cites.length) meta.push(`<span>cites <b>${v.cites.length}</b> prior verdict</span>`);
+  if (v.cites && v.cites.length) meta.push(`<span>cites <b>${v.cites.length}</b> prior verdict${v.cites.length === 1 ? '' : 's'}</span>`);
 
   const body = isOpen ? `
     <div class="dp-body">
@@ -1026,7 +1029,7 @@ function decisionCard(d){
           <div class="bh">binds downstream</div>
           ${v.binds ? `<div class="bind-as"><span class="bind-pill" data-prem="${v.binds}">${v.binds}</span>
             ${downstream.length
-              ? `cited by ${downstream.map(x => `<span class="cite-pill" data-goto="${x.id}">${x.session} d${x.seq}</span>`).join(' ')}`
+              ? `cited by ${downstream.map(x => `<span class="cite-pill" data-goto="${x.id}">${x.session} · ${String(x.seq).padStart(2, '0')}</span>`).join(' ')}`
               : `<span class="dim mono" style="font-size:10px">no downstream citations yet</span>`}</div>` : ''}
           <div class="arts">${(d.artifacts || []).map(a => `<div class="art"><b>${a.label}</b> · ${a.state}</div>`).join('')}</div>
         </div>
@@ -1102,11 +1105,13 @@ function renderInspector(){
   const citeRows = im.rows.map(r => `<div class="cite-row ${r.direct ? '' : 'casc'}" data-goto="${r.d.id}">
       <span class="n">${r.direct ? '›' : '»'}</span>
       <span class="t">${r.d.title} <span class="dim">· ${r.d.subject}</span></span>
-      <span class="s">${r.d.session} d${r.d.seq}</span>
+      <span class="chip ${r.d.verdict.status}">${STATUS_LABEL[r.d.verdict.status]}</span>
+      <span class="s">${r.d.verdict.conf.toFixed(2)}</span>
+      <span class="s" style="width:62px;text-align:right">${r.d.session} · ${String(r.d.seq).padStart(2, '0')}</span>
     </div>`).join('') || `<div class="dim" style="font-size:11px;padding:4px 2px">No decision cites this premise. It was sent but never consumed.</div>`;
 
   const chain = im.rows.filter(r => !r.direct).map(r =>
-    `<div><span class="arrow">└ </span>${r.via} <span class="dim">invalidates</span> <span class="unb">${r.d.verdict.binds}</span> <span class="dim">→</span> ${r.d.session} d${r.d.seq}</div>`
+    `<div><span class="arrow">└ </span>${r.d.session} · ${String(r.d.seq).padStart(2, '0')} <span class="dim">loses</span> ${r.via} <span class="dim">→</span> <span class="unb">${r.d.verdict.binds}</span> <span class="dim">unbound</span></div>`
   ).join('');
 
   el.innerHTML = `
@@ -1153,12 +1158,12 @@ function renderInspector(){
         </div>
         <ul class="warnlist">
           ${im.rows.filter(r => !r.direct).length ? `<li>${im.rows.filter(r => !r.direct).length} decision${im.rows.filter(r => !r.direct).length === 1 ? '' : 's'} lose support transitively through a bound verdict, not by direct citation.</li>` : ''}
-          ${im.sessions.length > 1 ? `<li>Cross-session: this premise reaches into ${im.sessions.filter(x => x !== (im.rows[0] && im.rows[0].d.session)).join(', ') || im.sessions.join(', ')}.</li>` : ''}
+          ${im.sessions.length > 1 ? `<li>Cross-session blast radius: reaches ${im.sessions.join(', ')} through ${im.rows.filter(r => !r.direct).length} bound verdict${im.rows.filter(r => !r.direct).length === 1 ? '' : 's'}.</li>` : ''}
           ${im.artifacts.length ? `<li>${im.artifacts.length} gate artifact${im.artifacts.length === 1 ? '' : 's'} would return to unverified: ${im.artifacts.slice(0, 3).map(a => a.label).join(', ')}${im.artifacts.length > 3 ? '…' : ''}</li>` : ''}
           ${!im.rows.length ? `<li style="color:var(--dim)">No decision depends on this premise. Retracting it changes nothing.</li>` : ''}
         </ul>
         <button class="btn sim-btn ${sim ? 'on' : ''}" data-sim="${state.premise}">${sim ? 'end retraction simulation' : 'simulate retraction'}</button>
-        ${im.artifacts.length && sim ? `<div style="margin-top:9px" class="arts">${im.artifacts.map(a => `<div class="art">unverified · <b>${a.label}</b> (${a.d.session} d${a.d.seq})</div>`).join('')}</div>` : ''}
+        ${im.artifacts.length && sim ? `<div style="margin-top:9px" class="arts">${im.artifacts.map(a => `<div class="art">unverified · <b>${a.label}</b> (${a.d.session} · ${String(a.d.seq).padStart(2, '0')})</div>`).join('')}</div>` : ''}
       </div>
     </div>`;
 }
